@@ -1,0 +1,140 @@
+apiVersion: catalog.bubustack.io/v1alpha1
+kind: EngramTemplate
+metadata:
+  name: openai-tts
+  annotations:
+    registry.bubustack.io/maturity: experimental
+spec:
+  version: 0.1.0
+  description: "Text-to-speech streaming engram powered by OpenAI's TTS and GPT-4o audio models."
+  image: ghcr.io/bubustack/openai-tts-engram:0.1.0
+  supportedModes:
+    - deployment
+    - job
+  configSchema:
+    type: object
+    properties:
+      model:
+        type: string
+        default: gpt-4o-mini-tts
+        description: OpenAI TTS model ID.
+      voice:
+        type: string
+        default: alloy
+        description: Default voice preset.
+      format:
+        type: string
+        enum: [pcm, opus, mp3, wav, flac, aac]
+        default: pcm
+        description: Output format sent to the Audio Speech API.
+      streamFormat:
+        type: string
+        enum: [audio, sse]
+        default: sse
+        description: Preferred OpenAI streaming format. `audio` yields chunked audio responses, `sse` emits text/event-stream chunks that the engram reassembles (with transcripts) before sending downstream.
+      sampleRate:
+        type: integer
+        default: 48000
+        description: Output sample rate in Hz.
+      targetSampleRate:
+        type: integer
+        default: 0
+        description: Optional resampling target for PCM outputs.
+      channels:
+        type: integer
+        default: 1
+        description: Number of audio channels in returned PCM.
+      speed:
+        type: number
+        minimum: 0.25
+        maximum: 4.0
+        default: 1.0
+        description: Playback speed multiplier.
+      instructions:
+        type: string
+        description: Optional style instructions (supported on gpt-4o-mini-tts).
+  inputSchema:
+    type: object
+    properties:
+      text:
+        type: string
+        description: Plain text to synthesize. For streaming pipelines, provided per-packet via the runtime field.
+      voice:
+        type: string
+        description: Optional voice override.
+      model:
+        type: string
+        description: Optional model override.
+      format:
+        type: string
+        enum: [pcm, opus, mp3, wav, flac, aac]
+        description: Output format preference.
+      streamFormat:
+        type: string
+        enum: [audio, sse]
+        description: Override for OpenAI stream_format (audio chunking or SSE events).
+      sampleRate:
+        type: integer
+        description: Optional sample-rate override in Hz.
+      channels:
+        type: integer
+        description: Optional channel-count override.
+      speed:
+        type: number
+        description: Optional playback speed override.
+      instructions:
+        type: string
+        description: Optional style instructions.
+  outputSchema:
+    type: object
+    properties:
+      type:
+        type: string
+        enum: [speech.audio.v1, speech.audio.done.v1]
+      model:
+        type: string
+      voice:
+        type: string
+      responseFormat:
+        type: string
+      contentType:
+        type: string
+      audio:
+        type: object
+        properties:
+          encoding: { type: string }
+          sampleRate: { type: integer }
+          channels: { type: integer }
+          data: { type: string, description: Base64-encoded audio payload }
+          storage:
+            type: object
+            properties:
+              path: { type: string }
+              contentType: { type: string }
+              sizeBytes: { type: integer }
+      speed:
+        type: number
+      instructions:
+        type: string
+      transcript:
+        type: string
+        description: Final transcript returned when SSE streaming is enabled.
+  secretSchema:
+    openai:
+      required: false
+      description: "OpenAI API credentials. Provide API_KEY and optional ORG_ID/PROJECT_ID/BASE_URL overrides."
+      mountType: env
+      envPrefix: OPENAI_
+    azure:
+      required: false
+      description: "Azure OpenAI credentials. Requires ENDPOINT, API_KEY, and DEPLOYMENT when used."
+      mountType: env
+      envPrefix: AZURE_
+      expectedKeys: ["ENDPOINT", "API_KEY", "DEPLOYMENT", "API_VERSION"]
+  execution:
+    service:
+      ports:
+        - name: grpc
+          protocol: TCP
+          port: 50051
+          targetPort: 50051
